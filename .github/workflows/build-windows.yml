@@ -56,7 +56,7 @@ jobs:
         run: flutter build windows --${{ github.event.inputs.build-type || 'release' }}
 
       - name: List build outputs
-        run: dir build/windows/runner/${{ github.event.inputs.build-type || 'release' }} /B
+        run: dir build\windows\runner\${{ github.event.inputs.build-type || 'release' }} /B
         shell: cmd
 
       - name: Upload artifact
