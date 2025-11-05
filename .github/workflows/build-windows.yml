@@ -1,10 +1,12 @@
-name: Debug Flutter Build
+name: Flutter Windows Build with EXE Detection
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
-  debug-build:
+  build-and-package:
     runs-on: windows-latest
 
     steps:
@@ -13,41 +15,66 @@ jobs:
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
 
-      - name: Show Flutter info
-        run: |
-          flutter --version
-          flutter config --enable-windows-desktop
-          flutter doctor -v
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
 
-      - name: Build project
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Windows app
         run: flutter build windows --release
 
-      - name: Explore build directory
+      - name: Verify EXE file exists
+        id: verify_exe
         run: |
-          Write-Host "=== Entire build directory structure ==="
-          Get-ChildItem -Path "build" -Recurse | Format-Table FullName, Attributes
-
-          Write-Host "=== Windows build contents ==="
-          if (Test-Path "build/windows") {
-            Get-ChildItem -Path "build/windows" -Recurse | Format-Table FullName
+          $exePath = "build/windows/runner/Release/*.exe"
+          $exeFiles = Get-ChildItem -Path $exePath -ErrorAction SilentlyContinue
+          if ($exeFiles) {
+            Write-Host "✅ EXE 文件找到: $($exeFiles.FullName)"
+            Write-Host "文件大小: $([math]::Round($exeFiles.Length/1MB,2)) MB"
+            Write-Host "::set-output name=exe_path::$($exeFiles.FullName)"
+            Write-Host "::set-output name=exe_name::$($exeFiles.Name)"
           } else {
-            Write-Host "build/windows directory not found!"
-          }
-
-          Write-Host "=== Runner directory contents ==="
-          if (Test-Path "build/windows/runner") {
-            Get-ChildItem -Path "build/windows/runner" -Recurse | Format-Table FullName
+            Write-Host "❌ 未找到 EXE 文件"
+            Write-Host "当前目录: $(Get-Location)"
+            Write-Host "构建目录内容:"
+            Get-ChildItem -Path "build" -Recurse | Format-Table FullName
+            exit 1
           }
         shell: pwsh
 
-      - name: Find executable files
+      - name: List all files in release directory
         run: |
-          $exeFiles = Get-ChildItem -Path "." -Filter "*.exe" -Recurse -ErrorAction SilentlyContinue
-          if ($exeFiles) {
-            Write-Host "Found EXE files:"
-            $exeFiles | Format-Table FullName, Length, LastWriteTime
-          } else {
-            Write-Host "No EXE files found in the entire project!"
-          }
+          Write-Host "=== Release 目录完整文件列表 ==="
+          Get-ChildItem -Path "build/windows/runner/Release" -Recurse | 
+            Format-Table Name, @{Name="Size(KB)";Expression={[math]::Round($_.Length/1KB,2)}}, LastWriteTime
+        shell: pwsh
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyApp-Windows
+          path: |
+            build/windows/runner/Release/*.exe
+            build/windows/runner/Release/*.dll
+            build/windows/runner/Release/data/
+          retention-days: 30
+
+      - name: Show download instructions
+        run: |
+          Write-Host "🎉 构建成功!"
+          Write-Host ""
+          Write-Host "📥 下载应用程序:"
+          Write-Host "1. 点击上方的 'Summary' 标签"
+          Write-Host "2. 在 Artifacts 部分找到 'MyApp-Windows'"
+          Write-Host "3. 点击下载 ZIP 文件"
+          Write-Host ""
+          Write-Host "📁 解压后您将找到:"
+          Write-Host "   - 主程序 EXE 文件"
+          Write-Host "   - 必要的 DLL 文件"
+          Write-Host "   - 资源文件"
         shell: pwsh
