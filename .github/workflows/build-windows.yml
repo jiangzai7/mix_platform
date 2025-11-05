@@ -31,7 +31,7 @@ jobs:
       - name: Verify EXE file exists
         id: verify_exe
         run: |
-          $exePath = "build/windows/runner/Release/*.exe"
+          $exePath = "build\windows\runner\Release\*.exe"
           $exeFiles = Get-ChildItem -Path $exePath -ErrorAction SilentlyContinue
           if ($exeFiles) {
             Write-Host "✅ EXE 文件找到: $($exeFiles.FullName)"
