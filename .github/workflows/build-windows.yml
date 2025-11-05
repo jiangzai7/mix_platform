@@ -1,74 +1,53 @@
-name: Build Windows Desktop
+name: Debug Flutter Build
 
 on:
-  push:
-    branches: [main, develop]
-    tags: ["v*"]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
-    inputs:
-      build-type:
-        description: "Build type"
-        required: true
-        default: "release"
-        type: choice
-        options:
-          - debug
-          - release
-          - profile
-      upload-artifact:
-        description: "Upload build artifact"
-        type: boolean
-        default: true
-
-env:
-  FLUTTER_CHANNEL: "stable"
 
 jobs:
-  build:
+  debug-build:
     runs-on: windows-latest
-    strategy:
-      matrix:
-        flutter-channel: [stable]
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
-        with:
-          channel: ${{ matrix.flutter-channel }}
 
       - name: Show Flutter info
         run: |
           flutter --version
           flutter config --enable-windows-desktop
+          flutter doctor -v
 
-      - name: Get dependencies
-        run: flutter pub get
+      - name: Build project
+        run: flutter build windows --release
 
-      - name: Run tests
-        run: flutter test
+      - name: Explore build directory
+        run: |
+          Write-Host "=== Entire build directory structure ==="
+          Get-ChildItem -Path "build" -Recurse | Format-Table FullName, Attributes
 
-      - name: Build Windows app
-        run: flutter build windows --${{ github.event.inputs.build-type || 'release' }}
+          Write-Host "=== Windows build contents ==="
+          if (Test-Path "build/windows") {
+            Get-ChildItem -Path "build/windows" -Recurse | Format-Table FullName
+          } else {
+            Write-Host "build/windows directory not found!"
+          }
 
-      - name: List build outputs
-        run: dir build\windows\runner\${{ github.event.inputs.build-type || 'release' }} /B
-        shell: cmd
+          Write-Host "=== Runner directory contents ==="
+          if (Test-Path "build/windows/runner") {
+            Get-ChildItem -Path "build/windows/runner" -Recurse | Format-Table FullName
+          }
+        shell: pwsh
 
-      - name: Upload artifact
-        if: ${{ github.event.inputs.upload-artifact != false }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-desktop-app
-          path: build/windows/runner/${{ github.event.inputs.build-type || 'release' }}/
-          retention-days: 7
-
-      - name: Create release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: build/windows/runner/release/*.exe
+      - name: Find executable files
+        run: |
+          $exeFiles = Get-ChildItem -Path "." -Filter "*.exe" -Recurse -ErrorAction SilentlyContinue
+          if ($exeFiles) {
+            Write-Host "Found EXE files:"
+            $exeFiles | Format-Table FullName, Length, LastWriteTime
+          } else {
+            Write-Host "No EXE files found in the entire project!"
+          }
+        shell: pwsh
